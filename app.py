@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="RetailLab Builder — ML Studio", page_icon="🧪", layout="wide")
 
-# --------- Estilos ---------
+# ---------- Estilos ----------
 st.markdown("""
 <style>
 :root{ --bg:#0a0f1c; --panel:#0f1630; --ink:#e8edff; --muted:#a6b5ff; --line:#22305b; --chip:#111a3e; }
@@ -22,10 +22,10 @@ hr{border:none;border-top:1px solid var(--line);margin:1rem 0}
 </style>
 """, unsafe_allow_html=True)
 
-# --------- Helpers ---------
+# ---------- Utils ----------
 def _safe_rerun():
     try: st.rerun()
-    except Exception: 
+    except Exception:
         try: st.experimental_rerun()
         except Exception: pass
 
@@ -106,8 +106,41 @@ def config_hash(cfg: dict) -> int:
     s = "|".join([f"{k}={cfg[k]}" for k in sorted(cfg.keys())])
     return _hash(s)
 
-# --------- Estado ---------
-if "seed" not in st.session_state: st.session_state.seed = 123
+def plot_sales(df):
+    c1, c2 = st.columns([3,2])
+    with c1:
+        g1 = px.line(df.groupby("date")["sales"].sum().reset_index(), x="date", y="sales", title="Ventas diarias")
+        g1.update_layout(height=360, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(g1, use_container_width=True)
+    with c2:
+        g2 = px.treemap(df, path=["category","product"], values="sales", title="Mix por categoría")
+        g2.update_layout(height=360, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(g2, use_container_width=True)
+
+def plot_more_graphs(df):
+    c1,c2 = st.columns(2)
+    with c1:
+        top_stores = df.groupby("store_id")["sales"].sum().nlargest(12).reset_index()
+        fig = px.bar(top_stores, x="store_id", y="sales", title="Top tiendas por ventas")
+        fig.update_layout(height=360, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        df2 = df.sample(min(2000, len(df)), random_state=42)
+        fig2 = px.scatter(df2, x="price", y="units", color="category", opacity=.6, title="Precio vs Unidades")
+        fig2.update_layout(height=360, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig2, use_container_width=True)
+    # Día de la semana
+    w = df.assign(dow=df["date"].dt.day_name()).groupby("dow")["sales"].sum().reindex(
+        ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    ).reset_index().rename(columns={"dow":"día"})
+    w["día"] = w["día"].map({
+        "Monday":"Lunes","Tuesday":"Martes","Wednesday":"Miércoles","Thursday":"Jueves",
+        "Friday":"Viernes","Saturday":"Sábado","Sunday":"Domingo"})
+    fig3 = px.bar(w, x="día", y="sales", title="Ventas por día de la semana")
+    fig3.update_layout(height=320, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig3, use_container_width=True)
+
+# ---------- Estado ----------
 if "gate_ready" not in st.session_state: st.session_state.gate_ready = False
 if "source_type" not in st.session_state: st.session_state.source_type = None
 if "df_main" not in st.session_state: st.session_state.df_main = None
@@ -119,7 +152,7 @@ if "last_hash" not in st.session_state: st.session_state.last_hash = None
 if "last_metrics" not in st.session_state: st.session_state.last_metrics = None
 if "last_imp" not in st.session_state: st.session_state.last_imp = None
 
-# --------- Sidebar ---------
+# ---------- Sidebar ----------
 def reset_all():
     for k in list(st.session_state.keys()):
         if k not in ["_is_running_with_streamlit"]: del st.session_state[k]
@@ -146,7 +179,7 @@ with st.sidebar:
         _safe_rerun()
 
 # ==========================================================
-#                PASO 1: FUENTE Y CARGA
+#           PASO 1: PANTALLA DE FUENTE Y CARGA
 # ==========================================================
 if not st.session_state.gate_ready:
     st.markdown('<div class="block-title">RetailLab Builder — ML Studio</div>', unsafe_allow_html=True)
@@ -231,7 +264,7 @@ if not st.session_state.gate_ready:
             _safe_rerun()
 
 # ==========================================================
-#                PASO 2: STUDIO NO-CODE
+#           PASO 2: STUDIO NO-CODE + VISUALIZACIÓN
 # ==========================================================
 else:
     st.markdown('<div class="block-title">RetailLab Builder — ML Studio</div>', unsafe_allow_html=True)
@@ -240,29 +273,24 @@ else:
 
     df = st.session_state.df_main
 
-    # KPIs + Gemma3
     cols = st.columns([3,2,1])
     with cols[0]: nice_kpis(df)
     with cols[1]: gemma3_summary(df)
     with cols[2]:
         st.markdown("**Fuente**"); st.write(st.session_state.source_type); st.write("Semilla:", st.session_state.seed)
 
-    tab_build, tab_data, tab_models, tab_docs = st.tabs(["🎛️ Builder","🧾 DataFrames","📈 Gráficos","📚 Doc"])
+    tab_build, tab_data, tab_graphs, tab_docs = st.tabs(["🎛️ Builder","🧾 DataFrames","📈 Gráficos","📚 Doc"])
 
-    # ---------- BUILDER ----------
+    # ---- BUILDER ----
     with tab_build:
         c1,c2,c3 = st.columns(3)
-        with c1:
-            st.selectbox("Objetivo", ["sales","units","stockout"], key="target", index=["sales","units","stockout"].index(st.session_state.model_cfg["target"]))
-        with c2:
-            st.selectbox("Modelo", ["Regresión lineal","Bosque aleatorio","XGBoost","Clasificador logístico","K-Means","ARIMA"], key="algo", index=["Regresión lineal","Bosque aleatorio","XGBoost","Clasificador logístico","K-Means","ARIMA"].index(st.session_state.model_cfg["algo"]))
-        with c3:
-            st.selectbox("Validación", ["Hold-out 80/20","KFold-5","KFold-10"], key="cv", index=["Hold-out 80/20","KFold-5","KFold-10"].index(st.session_state.model_cfg["cv"]))
+        with c1: st.selectbox("Objetivo", ["sales","units","stockout"], key="target", index=["sales","units","stockout"].index(st.session_state.model_cfg["target"]))
+        with c2: st.selectbox("Modelo", ["Regresión lineal","Bosque aleatorio","XGBoost","Clasificador logístico","K-Means","ARIMA"], key="algo", index=["Regresión lineal","Bosque aleatorio","XGBoost","Clasificador logístico","K-Means","ARIMA"].index(st.session_state.model_cfg["algo"]))
+        with c3: st.selectbox("Validación", ["Hold-out 80/20","KFold-5","KFold-10"], key="cv", index=["Hold-out 80/20","KFold-5","KFold-10"].index(st.session_state.model_cfg["cv"]))
         cc1,cc2 = st.columns(2)
         with cc1: st.slider("Complejidad", 1, 10, st.session_state.model_cfg["complexity"], key="complexity")
         with cc2: st.slider("Horizonte (días)", 7, 60, st.session_state.model_cfg["horizon"], key="horizon")
 
-        # sincroniza cfg
         st.session_state.model_cfg.update({
             "target": st.session_state.target,
             "algo": st.session_state.algo,
@@ -272,15 +300,11 @@ else:
         })
 
         cfg_hash = config_hash(st.session_state.model_cfg)
-
         col_btn = st.columns([1,1,6])
-        with col_btn[0]:
-            manual = st.button("▶️ Ejecutar")
-        with col_btn[1]:
-            st.toggle("Auto-ejecutar", key="auto_run")
+        with col_btn[0]: manual = st.button("▶️ Ejecutar")
+        with col_btn[1]: st.toggle("Auto-ejecutar", key="auto_run")
 
         run_now = manual or (st.session_state.auto_run and cfg_hash != st.session_state.last_hash)
-
         if run_now:
             with st.spinner("Gemma3 orquestando el flujo…"):
                 time.sleep(0.2)
@@ -301,7 +325,10 @@ else:
             fig_imp.update_layout(height=360, margin=dict(l=10,r=10,t=10,b=10), paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_imp, use_container_width=True)
 
-    # ---------- DATA ----------
+        st.markdown("#### Visuales rápidos")
+        plot_sales(df)
+
+    # ---- DATA ----
     with tab_data:
         st.markdown("#### DF general (editable)")
         st.data_editor(df.head(300), use_container_width=True, height=320, num_rows="dynamic")
@@ -317,13 +344,11 @@ else:
             st.markdown("**Ventas diarias**")
             st.data_editor(st.session_state.dfs["Ventas diarias"], use_container_width=True, height=260)
 
-    # ---------- GRÁFICOS ----------
-    with tab_models:
-        pass  # (tab no usado, consolidamos en Builder + Gráficos)
+    # ---- GRÁFICOS ----
+    with tab_graphs:
+        plot_more_graphs(df)
 
-    with tab_graphs := tab_models if False else st.tabs([]):  # placeholder para compat
-        pass
-
+    # ---- DOCS ----
     with tab_docs:
         st.markdown("### Documentación rápida")
         st.markdown("""
