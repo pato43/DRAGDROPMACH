@@ -19,6 +19,10 @@ html,body,[data-testid="stAppViewContainer"]{background:radial-gradient(1200px 8
 .kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .kpi>div{border:1px solid var(--line);background:#0e1736;border-radius:14px;padding:12px}
 hr{border:none;border-top:1px solid var(--line);margin:1rem 0}
+.logo-grid{display:grid;grid-template-columns:repeat(6, minmax(0,1fr));gap:10px;align-items:center}
+.logo-grid img{width:100%;max-height:48px;object-fit:contain;background:#0f1630;border-radius:10px;padding:6px;border:1px solid #22305b}
+.hero{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.badge{display:inline-flex;gap:.4rem;align-items:center;padding:.25rem .6rem;border-radius:999px;border:1px solid var(--line);background:var(--chip);font-size:.78rem}
 </style>
 """, unsafe_allow_html=True)
 
@@ -129,7 +133,6 @@ def plot_more_graphs(df):
         fig2 = px.scatter(df2, x="price", y="units", color="category", opacity=.6, title="Precio vs Unidades")
         fig2.update_layout(height=360, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig2, use_container_width=True)
-    # Día de la semana
     w = df.assign(dow=df["date"].dt.day_name()).groupby("dow")["sales"].sum().reindex(
         ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     ).reset_index().rename(columns={"dow":"día"})
@@ -160,10 +163,10 @@ def reset_all():
 
 with st.sidebar:
     st.markdown("### 🧪 RetailLab Builder")
-    st.toggle("Auto-ejecutar", key="auto_run", value=st.session_state.auto_run)
+    st.toggle("Auto-ejecutar", key="auto_run", value=st.session_state.auto_run)  # ÚNICO toggle con esta key
     st.button("🔄 Reiniciar", on_click=reset_all)
     st.markdown("---")
-    st.markdown("**Plantillas**")
+    st.markdown("**Plantillas rápidas**")
     c1,c2 = st.columns(2)
     if c1.button("Predicción ventas"):
         st.session_state.model_cfg.update({"target":"sales","algo":"Bosque aleatorio","cv":"KFold-5"})
@@ -183,8 +186,28 @@ with st.sidebar:
 # ==========================================================
 if not st.session_state.gate_ready:
     st.markdown('<div class="block-title">RetailLab Builder — ML Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtle">Selecciona una fuente y carga un archivo. Luego <b>Gemma3</b> preparará las vistas.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero">'
+        '<span class="badge">Gemma3 · Analítica asistida</span>'
+        '<span class="badge">MCP · Conectores</span>'
+        '<span class="badge">APIs · Integración</span>'
+        '<span class="badge">ADK Agents</span>'
+        '<span class="badge">LangChain · Orquestación</span>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown('<div class="subtle">Selecciona una fuente y carga un archivo. Luego Gemma3 prepara vistas y gráficos listos para usar.</div>', unsafe_allow_html=True)
     st.divider()
+
+    # Logos del stack
+    with st.expander("Stack & Conectores (ilustrativo)"):
+        cols = st.columns(6)
+        cols[0].image("https://ai.google.dev/static/gemma/images/gemma3.png?hl=es-419", caption="Gemma3", use_column_width=True)
+        cols[1].image("https://assets.streamlinehq.com/image/private/w_300,h_300,ar_1/f_auto/v1/icons/logos/langchain-ipuhh4qo1jz5ssl4x0g2a.png/langchain-dp1uxj2zn3752pntqnpfu2.png?_a=DATAg1AAZAA0", caption="LangChain", use_column_width=True)
+        cols[2].image("https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/mcp.png", caption="MCP", use_column_width=True)
+        cols[3].image("https://cdn-icons-png.flaticon.com/512/9159/9159105.png", caption="CSV", use_column_width=True)
+        cols[4].image("https://img.icons8.com/?size=512&id=117561&format=png", caption="Excel", use_column_width=True)
+        cols[5].image("https://mailmeteor.com/logos/assets/PNG/Google_Sheets_Logo_512px.png", caption="Sheets", use_column_width=True)
 
     src = st.radio("Fuente de datos", ["CSV (local)","Base de datos","Excel Online / OneDrive","Google Sheets"], horizontal=True)
     st.session_state.source_type = src
@@ -208,6 +231,7 @@ if not st.session_state.gate_ready:
             _safe_rerun()
 
     elif src == "Base de datos":
+        st.markdown("#### Conectar a BBDD (ilustrativo)")
         col1, col2 = st.columns(2)
         with col1:
             st.selectbox("Motor", ["PostgreSQL","MySQL","SQL Server","Oracle","SQLite"])
@@ -232,6 +256,7 @@ if not st.session_state.gate_ready:
             _safe_rerun()
 
     elif src == "Excel Online / OneDrive":
+        st.markdown("#### Conectar Excel Online / OneDrive (ilustrativo)")
         st.text_input("URL compartida del libro", "https://1drv.ms/x/s!demo")
         st.text_input("Hoja", "ventas")
         if st.button("Vincular y preparar"):
@@ -248,6 +273,7 @@ if not st.session_state.gate_ready:
             _safe_rerun()
 
     else:  # Google Sheets
+        st.markdown("#### Conectar Google Sheets (ilustrativo)")
         st.text_input("URL/ID de la hoja", "https://docs.google.com/spreadsheets/d/XXXXXXXX")
         st.text_input("Pestaña", "ventas")
         if st.button("Sincronizar y preparar"):
@@ -268,7 +294,7 @@ if not st.session_state.gate_ready:
 # ==========================================================
 else:
     st.markdown('<div class="block-title">RetailLab Builder — ML Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtle">Datos listos. <b>Gemma3</b> organizó un DF general y vistas derivadas. Configura tu modelo sin código.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtle">Datos listos. Gemma3 organizó un DF general y vistas derivadas. Ajusta tu modelo sin código y observa métricas y gráficos en vivo.</div>', unsafe_allow_html=True)
     st.divider()
 
     df = st.session_state.df_main
@@ -279,7 +305,7 @@ else:
     with cols[2]:
         st.markdown("**Fuente**"); st.write(st.session_state.source_type); st.write("Semilla:", st.session_state.seed)
 
-    tab_build, tab_data, tab_graphs, tab_docs = st.tabs(["🎛️ Builder","🧾 DataFrames","📈 Gráficos","📚 Doc"])
+    tab_build, tab_data, tab_graphs, tab_about = st.tabs(["🎛️ Builder","🧾 DataFrames","📈 Gráficos","ℹ️ Stack & Conectores"])
 
     # ---- BUILDER ----
     with tab_build:
@@ -300,11 +326,9 @@ else:
         })
 
         cfg_hash = config_hash(st.session_state.model_cfg)
-        col_btn = st.columns([1,1,6])
-        with col_btn[0]: manual = st.button("▶️ Ejecutar")
-        with col_btn[1]: st.toggle("Auto-ejecutar", key="auto_run")
-
+        manual = st.button("▶️ Ejecutar")
         run_now = manual or (st.session_state.auto_run and cfg_hash != st.session_state.last_hash)
+
         if run_now:
             with st.spinner("Gemma3 orquestando el flujo…"):
                 time.sleep(0.2)
@@ -348,18 +372,18 @@ else:
     with tab_graphs:
         plot_more_graphs(df)
 
-    # ---- DOCS ----
-    with tab_docs:
-        st.markdown("### Documentación rápida")
-        st.markdown("""
-**Regresión (Ventas)** — Predice `sales` usando variables como `price`, `promo`, `dow`.  
-**Clasificación (Stockout)** — Probabilidad de `stockout=1` para alertas.  
-**Clustering (Tiendas)** — Agrupa tiendas por ticket, mix y estacionalidad.  
-**Forecast (Temporal)** — Proyecta ventas por día (horizonte configurable).
-
-**Sugerencias**  
-1) Ajusta **Objetivo** y **Modelo**.  
-2) Revisa **métricas** e **importancia**.  
-3) Juega con **Complejidad** y **Horizonte** y observa cómo cambian resultados.
-""")
-        st.info("Tip: con **Auto-ejecutar** activado, los gráficos y métricas se actualizan al mover cualquier control.")
+    # ---- ABOUT ----
+    with tab_about:
+        st.markdown("### Arquitectura y Conectores (ilustrativo)")
+        st.markdown("- **Gemma3** como analista de datos asistido.\n- **MCP** para conectores unificados.\n- **APIs** para ingestión/serving.\n- **ADK Agents** para flujos asistidos.\n- **LangChain** para orquestación de herramientas.")
+        st.markdown("#### Logos")
+        grid = st.container()
+        with grid:
+            c = st.columns(6)
+            c[0].image("https://ai.google.dev/static/gemma/images/gemma3.png?hl=es-419", caption="Gemma3", use_column_width=True)
+            c[1].image("https://assets.streamlinehq.com/image/private/w_300,h_300,ar_1/f_auto/v1/icons/logos/langchain-ipuhh4qo1jz5ssl4x0g2a.png/langchain-dp1uxj2zn3752pntqnpfu2.png?_a=DATAg1AAZAA0", caption="LangChain", use_column_width=True)
+            c[2].image("https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/mcp.png", caption="MCP", use_column_width=True)
+            c[3].image("https://cdn-icons-png.flaticon.com/512/9159/9159105.png", caption="CSV", use_column_width=True)
+            c[4].image("https://img.icons8.com/?size=512&id=117561&format=png", caption="Excel", use_column_width=True)
+            c[5].image("https://mailmeteor.com/logos/assets/PNG/Google_Sheets_Logo_512px.png", caption="Sheets", use_column_width=True)
+        st.caption("Las integraciones mostradas corresponden al stack previsto de la plataforma.")
