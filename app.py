@@ -18,8 +18,8 @@ html,body,[data-testid="stAppViewContainer"]{background:radial-gradient(1200px 8
 .subtle{color:var(--muted);font-size:.95rem}
 .card{border:1px solid var(--line); background:var(--panel); border-radius:18px; padding:16px}
 .badge{display:inline-flex;gap:.4rem;align-items:center;padding:.2rem .5rem;border-radius:999px;border:1px solid var(--line);background:var(--chip);font-size:.78rem}
-.logo-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:.35rem 0 .8rem}
-.logo-row img{height:36px;border-radius:8px;padding:4px;border:1px solid #22305b;background:#0f1630}
+.logo-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:.45rem 0 .8rem}
+.logo-row img{height:44px;border-radius:8px;padding:5px;border:1px solid #22305b;background:#0f1630}
 hr{border:none;border-top:1px solid var(--line);margin:.8rem 0}
 </style>
 """, unsafe_allow_html=True)
@@ -122,7 +122,6 @@ def simulate_training(seed: int, df, cfg):
     samp["y_true"] = samp["stockout"].astype(int)
     samp["y_pred"] = (samp["proba"]>=0.5).astype(int)
     cm = pd.crosstab(samp["y_true"], samp["y_pred"]).reindex(index=[0,1], columns=[0,1], fill_value=0)
-    # curvas ROC aproximadas
     thrs = np.linspace(0,1,25)
     tpr, fpr = [], []
     for t in thrs:
@@ -133,14 +132,13 @@ def simulate_training(seed: int, df, cfg):
         tn = ((yhat==0)&(samp["y_true"]==0)).sum()
         tpr.append(tp/(tp+fn+1e-9)); fpr.append(fp/(fp+tn+1e-9))
     out["clf"] = {"sample":samp, "cm":cm, "roc":pd.DataFrame({"fpr":fpr,"tpr":tpr})}
-    # Clustering K-Means simple sin sklearn
+    # Clustering K-Means (proyección 2D por SVD)
     g = (df.groupby("store_id")
            .agg(sales=("sales","sum"), units=("units","sum"),
                 promo_rate=("promo","mean"), price=("price","mean"))
            .reset_index())
     X = g[["sales","units","promo_rate","price"]].to_numpy()
     X = (X - X.mean(0))/X.std(0)
-    # proyección 2D por SVD
     U,S,Vt = np.linalg.svd(X, full_matrices=False)
     Z = U[:, :2]*S[:2]
     k = min(12, max(2, cfg["complexity"]+1))
@@ -150,8 +148,12 @@ def simulate_training(seed: int, df, cfg):
         lab = dist.argmin(1)
         for j in range(k):
             if (lab==j).any(): cent[j] = Z[lab==j].mean(0)
-    out["clu"] = {"proj":pd.DataFrame({"x":Z[:,0],"y":Z[:,1],"cluster":lab,"store_id":g["store_id"]}),
-                  "sizes":pd.Series(lab).value_counts().sort_index()}
+    # salida de clustering
+    proj = pd.DataFrame({"x":Z[:,0],"y":Z[:,1],"cluster":lab,"store_id":g["store_id"]})
+    sizes = pd.Series(lab).value_counts().sort_index()
+    sizes = sizes.reset_index(name="size").rename(columns={"index":"cluster"})
+    sizes["cluster"] = sizes["cluster"].astype(str)  # <- evita error de columnas para plotly
+    out["clu"] = {"proj":proj, "sizes":sizes}
     # Forecast ARIMA-like naive
     horizon = int(cfg.get("horizon",14))
     ts2 = ts.copy()
@@ -203,11 +205,11 @@ with st.sidebar:
         st.session_state.model_cfg.update({"target":"sales","algo":"ARIMA","cv":"Hold-out 80/20","horizon":14})
         _safe_rerun()
 
-# ---------- Header + Stack logos ----------
+# ---------- Header + Logos en línea ----------
 st.markdown('<div class="block-title">RetailLab Builder — ML Studio</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtle">Estudio visual para construir y evaluar modelos de ML orientados a retail. '
-    'Flujo: <b>1)</b> Carga una fuente, <b>2)</b> Elige modelo, <b>3)</b> Ejecuta y explora métricas y gráficos.</div>',
+    '<div class="subtle">Estudio visual para construir y evaluar modelos de ML orientados a retail.'
+    ' Flujo: <b>1)</b> Carga una fuente, <b>2)</b> Elige modelo, <b>3)</b> Ejecuta y explora métricas y gráficos.</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
@@ -215,12 +217,16 @@ st.markdown(
     '<img src="https://ai.google.dev/static/gemma/images/gemma3.png?hl=es-419" title="Gemma3" />'
     '<img src="https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/mcp.png" title="MCP" />'
     '<img src="https://assets.streamlinehq.com/image/private/w_300,h_300,ar_1/f_auto/v1/icons/logos/langchain-ipuhh4qo1jz5ssl4x0g2a.png/langchain-dp1uxj2zn3752pntqnpfu2.png?_a=DATAg1AAZAA0" title="LangChain" />'
+    '<img src="https://google.github.io/adk-docs/assets/agent-development-kit.png" title="Google ADK" />'
     '<img src="https://cdn-icons-png.flaticon.com/512/9159/9159105.png" title="CSV" />'
     '<img src="https://img.icons8.com/?size=512&id=117561&format=png" title="Excel" />'
     '<img src="https://mailmeteor.com/logos/assets/PNG/Google_Sheets_Logo_512px.png" title="Sheets" />'
+    '<img src="https://upload.wikimedia.org/wikipedia/commons/a/ad/Logo_PostgreSQL.png" title="PostgreSQL" />'
+    '<img src="https://cdn-icons-png.flaticon.com/512/5968/5968364.png" title="SQL Server" />'
     '</div>',
     unsafe_allow_html=True
 )
+st.caption("Gemma3, MCP, LangChain, Google ADK, y conectores típicos (CSV/Excel/Sheets/BBDD) — ilustrativo del stack previsto.")
 st.divider()
 
 # ==========================================================
@@ -312,8 +318,8 @@ if not st.session_state.gate_ready:
 else:
     df = st.session_state.df_main
 
-    # Paso a paso
-    st.info("**Cómo usar:** 1) Elige *Objetivo* y *Modelo*. 2) Ajusta *Validación*, *Complejidad* y *Horizonte*. 3) Pulsa **Ejecutar** (o activa Auto-ejecutar) y revisa **Métricas**, **Importancia** y **Gráficos** que cambian según el modelo.")
+    st.info("**Cómo usar:** 1) Elige *Objetivo* y *Modelo*. 2) Ajusta *Validación*, *Complejidad* y *Horizonte*. "
+            "3) Pulsa **Ejecutar** (o activa Auto-ejecutar). Mira **Métricas**, **Importancia** y **Gráficos**, que cambian según el modelo.")
 
     # KPIs + Gemma3
     c = st.columns([3,2])
@@ -364,8 +370,8 @@ else:
             fig_imp = px.bar(st.session_state.last_imp, x="importance", y="feature", orientation="h")
             fig_imp.update_layout(height=320, margin=dict(l=10,r=10,t=10,b=10), paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_imp, use_container_width=True)
+
         st.markdown("#### Resumen rápido")
-        # vistas siempre útiles
         cquick1,cquick2 = st.columns([3,2])
         with cquick1:
             g1 = px.line(df.groupby("date")["sales"].sum().reset_index(), x="date", y="sales", title="Ventas diarias")
@@ -396,6 +402,7 @@ else:
     with tab_graphs:
         out = st.session_state.last_out
         algo = st.session_state.model_cfg["algo"]
+        st.caption("Estas visualizaciones cambian según el modelo seleccionado en el Builder.")
         if out is None:
             st.info("Ejecuta el Builder para ver gráficos específicos del modelo.")
         else:
@@ -416,23 +423,26 @@ else:
                 st.markdown("**Clasificación: Matriz de confusión y ROC**")
                 cm = out["clf"]["cm"]
                 z = cm.values
-                f1 = go.Figure(data=go.Heatmap(z=z, x=["Pred 0","Pred 1"], y=["Real 0","Real 1"], colorscale="Blues", text=z, texttemplate="%{text}"))
+                f1 = go.Figure(data=go.Heatmap(z=z, x=["Pred 0","Pred 1"], y=["Real 0","Real 1"],
+                                               colorscale="Blues", text=z, texttemplate="%{text}"))
                 f1.update_layout(height=320, margin=dict(l=10,r=10,t=30,b=10), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(f1, use_container_width=True)
                 roc = out["clf"]["roc"]
                 f2 = go.Figure()
                 f2.add_trace(go.Scatter(x=roc["fpr"], y=roc["tpr"], mode="lines", name="ROC"))
                 f2.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Azar", line=dict(dash="dash")))
-                f2.update_layout(height=320, xaxis_title="FPR", yaxis_title="TPR", margin=dict(l=10,r=10,t=30,b=10), paper_bgcolor="rgba(0,0,0,0)")
+                f2.update_layout(height=320, xaxis_title="FPR", yaxis_title="TPR",
+                                 margin=dict(l=10,r=10,t=30,b=10), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(f2, use_container_width=True)
 
             elif "K-Means" in algo:
                 st.markdown("**Clustering: proyección 2D y tamaño de clúster**")
                 proj = out["clu"]["proj"]
-                f1 = px.scatter(proj, x="x", y="y", color=proj["cluster"].astype(str), hover_data=["store_id"], title="Tiendas en 2D (SVD)")
+                f1 = px.scatter(proj, x="x", y="y", color=proj["cluster"].astype(str),
+                                hover_data=["store_id"], title="Tiendas en 2D (SVD)")
                 f1.update_layout(height=340, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(f1, use_container_width=True)
-                sizes = out["clu"]["sizes"].reset_index().rename(columns={"index":"cluster",0:"size"})
+                sizes = out["clu"]["sizes"]
                 f2 = px.bar(sizes, x="cluster", y="size", title="Tamaño de clúster")
                 f2.update_layout(height=280, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(f2, use_container_width=True)
